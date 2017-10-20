@@ -276,18 +276,34 @@ elif env.subst("$PIOFRAMEWORK") in ("arduino", "simba"):
     if ota_port:
         env.Replace(UPLOADCMD="$UPLOADOTACMD")
 
-# Configure native SDK
 else:
+    upload_address = None
+    if env.subst("$PIOFRAMEWORK") == "esp8266-rtos-sdk":
+        env.Replace(
+            UPLOAD_ADDRESS="0x20000",
+        )
+    else: # Configure Native SDK
+        env.Append(
+            CPPPATH=[
+                join("$SDK_ESP8266_DIR", "include"), "$PROJECTSRC_DIR"
+            ],
+
+            LIBPATH=[
+                join("$SDK_ESP8266_DIR", "lib"),
+                join("$SDK_ESP8266_DIR", "ld")
+            ],
+        )
+        env.Replace(
+            LIBS=[
+                "c", "gcc", "phy", "pp", "net80211", "lwip", "wpa", "wpa2",
+                "main", "wps", "crypto", "json", "ssl", "pwm", "upgrade",
+                "smartconfig", "airkiss", "at"
+            ],
+            UPLOAD_ADDRESS = "0X40000"
+        )
+
+    # ESP8266 RTOS SDK and Native SDK common configuration
     env.Append(
-        CPPPATH=[
-            join("$SDK_ESP8266_DIR", "include"), "$PROJECTSRC_DIR"
-        ],
-
-        LIBPATH=[
-            join("$SDK_ESP8266_DIR", "lib"),
-            join("$SDK_ESP8266_DIR", "ld")
-        ],
-
         BUILDERS=dict(
             ElfToBin=Builder(
                 action=env.VerboseAction(" ".join([
@@ -309,13 +325,8 @@ else:
             )
         )
     )
-    env.Replace(
-        LIBS=[
-            "c", "gcc", "phy", "pp", "net80211", "lwip", "wpa", "wpa2",
-            "main", "wps", "crypto", "json", "ssl", "pwm", "upgrade",
-            "smartconfig", "airkiss", "at"
-        ],
 
+    env.Replace(
         UPLOADERFLAGS=[
             "-vv",
             "-cd", "$UPLOAD_RESETMETHOD",
@@ -323,10 +334,9 @@ else:
             "-cp", '"$UPLOAD_PORT"',
             "-ca", "0x00000",
             "-cf", "${SOURCES[0]}",
-            "-ca", "0x40000",
+            "-ca", "$UPLOAD_ADDRESS",
             "-cf", "${SOURCES[1]}"
         ],
-
         UPLOADCMD='$UPLOADER $UPLOADERFLAGS',
     )
 
@@ -353,8 +363,8 @@ if "nobuild" in COMMAND_LINE_TARGETS:
         target_firm = join("$BUILD_DIR", "firmware.bin")
     else:
         target_firm = [
-            join("$BUILD_DIR", "firmware_00000.bin"),
-            join("$BUILD_DIR", "firmware_40000.bin")
+            join("$BUILD_DIR", "eagle.flash.bin"),
+            join("$BUILD_DIR", "eagle.irom0text.bin")
         ]
 else:
     if set(["buildfs", "uploadfs", "uploadfsota"]) & set(COMMAND_LINE_TARGETS):
@@ -369,8 +379,8 @@ else:
             target_firm = env.ElfToBin(
                 join("$BUILD_DIR", "firmware"), target_elf)
         else:
-            target_firm = env.ElfToBin([join("$BUILD_DIR", "firmware_00000"),
-                                        join("$BUILD_DIR", "firmware_40000")],
+            target_firm = env.ElfToBin([join("$BUILD_DIR", "eagle.flash.bin"),
+                                        join("$BUILD_DIR", "eagle.irom0text.bin")],
                                        target_elf)
 
 AlwaysBuild(env.Alias("nobuild", target_firm))
